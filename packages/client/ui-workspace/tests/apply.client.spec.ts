@@ -84,7 +84,8 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   }))
   const rename = vi.fn(async () => ({}))
   const selectPanel = vi.fn()
-  ctx.provide('layout', { selectPanel, beginNavigation: () => new AbortController().signal })
+  const collapseSidebar = vi.fn()
+  ctx.provide('layout', { selectPanel, collapseSidebar, beginNavigation: () => new AbortController().signal })
   const search = vi.fn(async () => ({
     ok: true as const,
     value: { items: [{ sessionId: 'session' as never, snippet: 'match' }], hasMore: false },
@@ -171,7 +172,7 @@ async function bench(access: 'fake' | 'static' = 'fake') {
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource,
     whenResourceAccess, stopGuard, status,
-    retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
+    retain, using, selectPanel, collapseSidebar, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
     workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
     setSessions: (snapshot: SessionListState): void => { sessionSnapshot = snapshot },
@@ -899,6 +900,36 @@ describe('ui-workspace apply', () => {
     const picker = faceOf(b.slots.entries('conversation.hero.workspace')[0]!) as WorkspacePickerInjected
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+  })
+
+  it('collapses the sidebar when the browser opens a session', async () => {
+    const b = await bench()
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 })).await()
+
+    const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
+    browser.open('session' as never)
+
+    // Selecting a chat from the sidebar folds it; the collapse is one-way, so it
+    // goes through the collapse-only layout action, not the toggle.
+    expect(b.collapseSidebar).toHaveBeenCalledOnce()
+    expect(b.retain).toHaveBeenCalledWith('session', { source: 'mainView', facets: { conversation: true } })
+  })
+
+  it('folds the sidebar before the chat opens when a chat is selected', async () => {
+    const b = await bench()
+    declare(b.slots, 'sidebar.workspaces')
+    await b.ctx.plugin({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 })).await()
+
+    const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
+    browser.open('session' as never)
+
+    // The chat click closes the nav bar before the chat opens, and each
+    // selection re-runs the collapse-only action.
+    expect(b.collapseSidebar.mock.invocationCallOrder[0])
+      .toBeLessThan(b.retain.mock.invocationCallOrder[0]!)
+    browser.open('session' as never)
+    expect(b.collapseSidebar).toHaveBeenCalledTimes(2)
   })
 
   it('declares the browser child slots and reports directory-flow occupancy per surface', async () => {

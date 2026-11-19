@@ -198,6 +198,9 @@ export function apply(ctx: Context, config: SyncedConfig<WorkspaceNavigationConf
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
   const factoryFlowSource = flowSource('workspace.picker.directoryFlow')
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
+    // Selecting a chat from the sidebar folds it: the collapse is one-way, so
+    // it goes through the collapse-only action, not the toggle.
+    ctx.layout.collapseSidebar()
     uiWorkspace.openSession(sessionId)
   }
   // Registry-global sets as Sets, rebuilt only when the Workspace snapshot changes.

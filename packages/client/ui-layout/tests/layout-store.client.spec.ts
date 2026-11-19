@@ -53,6 +53,24 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().layoutInfo.sidebar).toBe(280)
   })
 
+  it('collapses the wide sidebar and never re-expands a closed one', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(400)
+    actions.collapseSidebar()
+    expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 0, viewportWidth: 1920 })
+    actions.collapseSidebar()
+    expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 0, narrowExpanded: false })
+  })
+
+  it('collapses a manually expanded narrow sidebar and keeps its width preference', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(400)
+    actions.setViewportWidth(980)
+    actions.toggleSidebar()
+    actions.collapseSidebar()
+    expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 400, viewportWidth: 980, narrowExpanded: false })
+  })
+
   it('keeps the sidebar preference while toggling its narrow override', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setSidebar(400)
@@ -119,7 +137,7 @@ describe('main panel selection', () => {
     expect(store.getSnapshot().layoutInfo).toBe(selected.layoutInfo)
   })
 
-  it.each(['setSidebar', 'toggleSidebar', 'setViewportWidth', 'setRightbar', 'openRightbar', 'closeRightbar'] as const)(
+  it.each(['setSidebar', 'toggleSidebar', 'collapseSidebar', 'setViewportWidth', 'setRightbar', 'openRightbar', 'closeRightbar'] as const)(
     'preserves panelInfo identity when %s changes layoutInfo', (action) => {
       const { store, actions } = createLayoutStore().create()
       actions.selectPanel(panelA)
@@ -128,6 +146,7 @@ describe('main panel selection', () => {
       switch (action) {
         case 'setSidebar': actions.setSidebar(400); break
         case 'toggleSidebar': actions.toggleSidebar(); break
+        case 'collapseSidebar': actions.collapseSidebar(); break
         case 'setViewportWidth': actions.setViewportWidth(980); break
         case 'setRightbar': actions.setRightbar(500); break
         case 'openRightbar': actions.openRightbar(true, true); break
@@ -261,12 +280,13 @@ describe('right panel instant geometry', () => {
     expect(store.getSnapshot().layoutInfo).toMatchObject({ rightbarTrack: false, rightbarInstant: false })
   })
 
-  it.each(['setSidebar', 'toggleSidebar', 'setRightbar', 'setViewportWidth'] as const)('clears instant geometry on %s', (action) => {
+  it.each(['setSidebar', 'toggleSidebar', 'collapseSidebar', 'setRightbar', 'setViewportWidth'] as const)('clears instant geometry on %s', (action) => {
     const { store, actions } = createLayoutStore().create()
     actions.openRightbar(true, true)
     actions.closeRightbar()
     expect(store.getSnapshot().layoutInfo.rightbarInstant).toBe(true)
     if (action === 'toggleSidebar') actions.toggleSidebar()
+    else if (action === 'collapseSidebar') actions.collapseSidebar()
     else actions[action](action === 'setViewportWidth' ? 1800 : 350)
     expect(store.getSnapshot().layoutInfo.rightbarInstant).toBe(false)
     actions.closeRightbar()
